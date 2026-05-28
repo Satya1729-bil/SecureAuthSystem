@@ -1,0 +1,441 @@
+openapi: 3.0.3
+info:
+  title: Secure User Authentication System API
+  description: |
+    ## Overview
+    A production-grade JWT-based Authentication & Authorization Backend System.
+
+    ### Features
+    - JWT Access + Refresh Token rotation
+    - Bcrypt password hashing (salt rounds: 12)
+    - Account lockout after 5 failed attempts
+    - Email verification & Password reset
+    - Helmet.js security headers
+    - Rate limiting (global + auth-specific)
+    - Role-based access control (user / admin)
+
+    ### Authentication
+    Include the Bearer token in the Authorization header:
+    ```
+    Authorization: Bearer <access_token>
+    ```
+
+    **Author:** Gudala Venkata Satyanarayana  
+    **Assignment:** Secure User Authentication System  
+    **Date:** May 2026
+  version: 1.0.0
+  contact:
+    name: Gudala Venkata Satyanarayana
+
+servers:
+  - url: http://localhost:5000/api
+    description: Local Development Server
+  - url: https://your-deployed-app.railway.app/api
+    description: Production Server
+
+tags:
+  - name: Health
+    description: Server health check
+  - name: Auth - Phase 1
+    description: Registration, Login, JWT Workflows
+  - name: Auth - Phase 2
+    description: Password Management & Session Handling
+  - name: Users
+    description: User profile management
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        '200':
+          description: Server is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Auth System API is running" }
+                  version: { type: string, example: "1.0.0" }
+
+  /auth/register:
+    post:
+      tags: [Auth - Phase 1]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              name: "Gudala Satyanarayana"
+              email: "gudala@example.com"
+              password: "SecurePass@123"
+              confirmPassword: "SecurePass@123"
+      responses:
+        '201':
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Email already exists
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /auth/login:
+    post:
+      tags: [Auth - Phase 1]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+        '423':
+          description: Account locked (too many attempts)
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /auth/me:
+    get:
+      tags: [Auth - Phase 1]
+      summary: Get current authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh-token:
+    post:
+      tags: [Auth - Phase 1]
+      summary: Refresh access token using refresh token (with rotation)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: New token pair issued
+        '401':
+          description: Invalid or expired refresh token
+
+  /auth/logout:
+    post:
+      tags: [Auth - Phase 1]
+      summary: Logout (invalidate refresh token)
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Logged out successfully
+
+  /auth/logout-all:
+    post:
+      tags: [Auth - Phase 1]
+      summary: Logout from all devices
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: All sessions invalidated
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth - Phase 2]
+      summary: Request password reset email
+      description: Sends reset link to email. Always returns 200 to prevent user enumeration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Reset email sent (or silently skipped if email not found)
+
+  /auth/reset-password/{token}:
+    patch:
+      tags: [Auth - Phase 2]
+      summary: Reset password using token from email
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Token received via email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Password reset successful, new tokens issued
+        '400':
+          description: Invalid or expired token
+
+  /auth/change-password:
+    patch:
+      tags: [Auth - Phase 2]
+      summary: Change password (authenticated user)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password changed, all sessions invalidated
+        '401':
+          description: Current password incorrect
+
+  /auth/verify-email/{token}:
+    get:
+      tags: [Auth - Phase 2]
+      summary: Verify email address
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Email verified
+        '400':
+          description: Invalid or expired token
+
+  /users/profile:
+    get:
+      tags: [Users]
+      summary: Get own profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+    patch:
+      tags: [Users]
+      summary: Update own profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 50
+      responses:
+        '200':
+          description: Profile updated
+    delete:
+      tags: [Users]
+      summary: Deactivate account
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Account deactivated
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [name, email, password, confirmPassword]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 50
+          example: "Gudala Satyanarayana"
+        email:
+          type: string
+          format: email
+          example: "gudala@example.com"
+        password:
+          type: string
+          minLength: 8
+          description: Must contain uppercase, lowercase, number, special character
+          example: "SecurePass@123"
+        confirmPassword:
+          type: string
+          example: "SecurePass@123"
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    ResetPasswordRequest:
+      type: object
+      required: [password, confirmPassword]
+      properties:
+        password:
+          type: string
+          minLength: 8
+        confirmPassword:
+          type: string
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword, confirmNewPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
+        confirmNewPassword:
+          type: string
+
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "64abc123def456789"
+        name:
+          type: string
+          example: "Gudala Satyanarayana"
+        email:
+          type: string
+          example: "gudala@example.com"
+        role:
+          type: string
+          enum: [user, admin]
+        isEmailVerified:
+          type: boolean
+        isActive:
+          type: boolean
+        lastLogin:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User'
+            accessToken:
+              type: string
+              description: JWT access token (expires in 15 min)
+            refreshToken:
+              type: string
+              description: JWT refresh token (expires in 7 days)
+
+  responses:
+    Unauthorized:
+      description: Unauthorized - invalid or missing token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean, example: false }
+              message: { type: string, example: "Access denied. No token provided." }
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean, example: false }
+              message: { type: string, example: "Validation failed" }
+              errors:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    field: { type: string }
+                    message: { type: string }
+    RateLimitError:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean, example: false }
+              message: { type: string, example: "Too many authentication attempts, please try again in 15 minutes." }

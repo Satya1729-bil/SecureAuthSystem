@@ -1,5 +1,11 @@
 # 🔐 Secure User Authentication System
 
+## 🌐 Live API
+https://secureauthsystem-ej8p.onrender.com
+
+## 📡 Health Check
+https://secureauthsystem-ej8p.onrender.com/health
+
 > **Assignment Project** | Assigned: 26 May 2026  
 > **Author:** Gudala Venkata Satyanarayana | Back-End Developer  
 > **Role:** Back-End Developer

@@ -1,16 +1,13 @@
-# 🔐 Secure User Authentication System
+# SecureAuthSystem
 
-## 🌐 Live API
-https://secureauthsystem-ej8p.onrender.com
+**A ready-to-use authentication backend for Node.js apps.**
 
-## 📡 Health Check
-https://secureauthsystem-ej8p.onrender.com/health
+An authentication API you can put in front of any Node app. It handles sign-up and login with bcrypt-hashed passwords and short-lived JWTs with refresh-token rotation. It locks accounts after repeated failed logins and rate-limits sensitive routes.
 
-> **Assignment Project** | Assigned: 26 May 2026  
-> **Author:** Gudala Venkata Satyanarayana | Back-End Developer  
-> **Role:** Back-End Developer
+- **Live API health check:** https://secure-auth-system-delta.vercel.app/health
+- **Second deployment (Render, may take a minute to wake up):** https://secureauthsystem-ej8p.onrender.com/health
 
-A production-grade, secure authentication and authorization backend built with Node.js, Express.js, and MongoDB. Implements industry-standard security practices including JWT token rotation, bcrypt password hashing, rate limiting, and account lockout protection.
+> Built as a back-end developer assignment (May 2026) by Gudala Venkata Satyanarayana.
 
 ---
 
